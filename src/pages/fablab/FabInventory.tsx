@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Check, ArrowUp, ArrowDown, Pencil, Trash2, Search, Package, AlertTriangle, ChevronDown } from 'lucide-react';
+import { Plus, Check, ArrowUp, ArrowDown, Pencil, Trash2, Search, Package, AlertTriangle} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +19,7 @@ const CAT_COLORS: Record<string, string> = {
 };
 
 export function FabInventory() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
   const { items, movements, addItem, updateItem, deleteItem, addMovement, fetchItems, fetchMovements } = useInventoryStore();
   const { user } = useAuthStore();
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Link2, X, Wrench } from 'lucide-react';
+import { Plus, Link2, Wrench, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 // @ts-ignore unused import
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

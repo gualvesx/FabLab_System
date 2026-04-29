@@ -11,7 +11,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown,
   Menu, X, LogIn, ExternalLink,
   Cpu, Scissors, Zap, Users, BookOpen, Layers3,
-  Printer, Terminal, Wrench, Microchip
+  Printer, Terminal
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 

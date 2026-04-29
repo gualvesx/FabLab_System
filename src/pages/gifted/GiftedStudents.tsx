@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 
 export function GiftedStudents() {
   const { t } = useTranslation();
-  const { students, addStudent, updateStudent, deleteStudent, fetchStudents } = useStudentStore();
+  const { students, addStudent, deleteStudent, fetchStudents } = useStudentStore();
   const [deleteStudentId, setDeleteStudentId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 

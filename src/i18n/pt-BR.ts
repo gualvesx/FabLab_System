@@ -30,7 +30,6 @@ export const ptBR = {
       date: 'Data',
       description: 'Descrição',
       notes: 'Observações',
-      title: 'Título',
       category: 'Categoria',
       responsible: 'Responsável',
       quantity: 'Quantidade',

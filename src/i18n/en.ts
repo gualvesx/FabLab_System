@@ -30,7 +30,6 @@ export const en = {
       date: 'Date',
       description: 'Description',
       notes: 'Notes',
-      title: 'Title',
       category: 'Category',
       responsible: 'Responsible',
       quantity: 'Quantity',

@@ -16,7 +16,7 @@ export function StudentGrades() {
 
   useEffect(() => { fetchStudents(); }, []);
 
-  const student = students.find((s) => s.id === user?.id || s.email === user?.email);
+  const student = students.find((s) => s.id === user?.id);
 
   if (!student) {
     return (
