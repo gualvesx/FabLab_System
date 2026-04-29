@@ -24,9 +24,9 @@ function PermissionEditor({ perms, onChange }: {
   const modules = ['fablab', 'gifted', 'student'] as const;
   const moduleLabels = { fablab: 'FabLab', gifted: 'Altas Habilidades', student: 'Área do Aluno' };
 
-  const toggle = (route: string) => {
-    onChange(perms.map(p => p.route === route ? { ...p, allowed: !p.allowed } : p));
-  };
+const toggle = (route: any) => {
+  onChange(perms.map(p => p.route === route ? { ...p, allowed: !p.allowed } : p));
+};
 
   const toggleAll = (mod: string, val: boolean) => {
     const routes = ALL_ROUTES.filter(r => r.module === mod).map(r => r.route);

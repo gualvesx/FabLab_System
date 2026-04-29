@@ -17,7 +17,6 @@ import { useAuthStore } from '@/stores/authStore';
 
 /* ─── constants ─────────────────────────────────────────── */
 const RED = '#D42020';
-const RED_DARK = '#B01C1C';
 
 const NAV_LINKS = [
   { label: 'Sobre', id: 'sobre' },
