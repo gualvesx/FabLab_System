@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/stores/authStore';
 import { PageTransition } from '@/components/layout/PageTransition';
+import { supabase } from '@/lib/supabase';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type MachineStatus = 'operacional' | 'manutencao' | 'limpeza' | 'inativo' | 'aguardando_peca';
@@ -49,11 +50,7 @@ const STATUS_STYLE: Record<MachineStatus, { color: string; icon: React.ReactNode
 const CATEGORIES = ['Corte a Laser', 'Impressão 3D', 'CNC', 'Eletrônica', 'Costura', 'Sublimação', 'Outro'];
 const LOCALE_MAP: Record<string, string> = { pt: 'pt-BR', en: 'en-US', es: 'es-ES', fr: 'fr-FR' };
 
-const STORAGE_KEY = 'fablab_machinery';
-const load = (): Machine[] => {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
-};
-const save = (m: Machine[]) => localStorage.setItem(STORAGE_KEY, JSON.stringify(m));
+const STORAGE_KEY = 'fablab_machinery'; // legado — usado só para migrar dados antigos, se existirem
 
 const EMPTY_FORM = {
   name: '', model: '', location: '', category: CATEGORIES[0], status: 'operacional' as MachineStatus, notes: '',
@@ -111,7 +108,8 @@ export function FabMachinery() {
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin' || user?.role === 'professor';
 
-  const [machines, setMachines] = useState<Machine[]>(load);
+  const [machines, setMachines] = useState<Machine[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<MachineStatus | 'all'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -123,7 +121,28 @@ export function FabMachinery() {
   const [eventForm, setEventForm] = useState(EMPTY_EVENT);
   const [schedTarget, setSchedTarget] = useState<string | null>(null);
 
-  useEffect(() => { save(machines); }, [machines]);
+  useEffect(() => { fetchMachines(); }, []);
+
+  const fetchMachines = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('machines').select('*').order('created_at', { ascending: false });
+    if (!error && data) {
+      setMachines(data as Machine[]);
+    } else {
+      // Migração única: se havia dados antigos só no localStorage deste navegador, sobe pro banco
+      const legacy: Machine[] = (() => {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+      })();
+      if (legacy.length > 0) {
+        const { data: migrated } = await supabase.from('machines').insert(legacy.map(({ id, ...m }) => m)).select();
+        if (migrated) {
+          setMachines(migrated as Machine[]);
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      }
+    }
+    setLoading(false);
+  };
 
   // ── Computed ──
   const counts = Object.fromEntries(
@@ -146,23 +165,21 @@ export function FabMachinery() {
   };
 
   // ── CRUD machines ──
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim()) return;
-    const now = new Date().toISOString();
     if (editId) {
-      setMachines(prev => prev.map(m => m.id === editId ? { ...m, ...form, updated_at: now } : m));
+      const { data } = await supabase.from('machines').update(form).eq('id', editId).select().single();
+      if (data) setMachines(prev => prev.map(m => m.id === editId ? (data as Machine) : m));
       setEditId(null);
     } else {
-      const machine: Machine = {
-        id: crypto.randomUUID(), ...form,
-        scheduled_events: [], created_at: now, updated_at: now,
-      };
-      setMachines(prev => [machine, ...prev]);
+      const { data } = await supabase.from('machines').insert({ ...form, scheduled_events: [] }).select().single();
+      if (data) setMachines(prev => [data as Machine, ...prev]);
     }
     setAddOpen(false); setForm(EMPTY_FORM);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    await supabase.from('machines').delete().eq('id', id);
     setMachines(prev => prev.filter(m => m.id !== id));
     if (expandedId === id) setExpandedId(null);
   };
@@ -172,27 +189,32 @@ export function FabMachinery() {
     setEditId(m.id); setAddOpen(true);
   };
 
-  const setStatus = (id: string, status: MachineStatus) => {
-    setMachines(prev => prev.map(m => m.id === id ? { ...m, status, updated_at: new Date().toISOString() } : m));
+  const setStatus = async (id: string, status: MachineStatus) => {
+    setMachines(prev => prev.map(m => m.id === id ? { ...m, status } : m));
+    await supabase.from('machines').update({ status }).eq('id', id);
   };
 
   // ── CRUD events ──
-  const addEvent = (machineId: string) => {
+  const addEvent = async (machineId: string) => {
     if (!eventForm.scheduled_date) return;
     const ev: ScheduledEvent = {
       id: crypto.randomUUID(), ...eventForm,
       created_by: user?.name || 'Admin',
     };
-    setMachines(prev => prev.map(m => m.id === machineId
-      ? { ...m, scheduled_events: [...m.scheduled_events, ev], updated_at: new Date().toISOString() }
-      : m));
+    const target = machines.find(m => m.id === machineId);
+    if (!target) return;
+    const nextEvents = [...target.scheduled_events, ev];
+    setMachines(prev => prev.map(m => m.id === machineId ? { ...m, scheduled_events: nextEvents } : m));
     setEventForm(EMPTY_EVENT); setSchedTarget(null);
+    await supabase.from('machines').update({ scheduled_events: nextEvents }).eq('id', machineId);
   };
 
-  const removeEvent = (machineId: string, eventId: string) => {
-    setMachines(prev => prev.map(m => m.id === machineId
-      ? { ...m, scheduled_events: m.scheduled_events.filter(e => e.id !== eventId) }
-      : m));
+  const removeEvent = async (machineId: string, eventId: string) => {
+    const target = machines.find(m => m.id === machineId);
+    if (!target) return;
+    const nextEvents = target.scheduled_events.filter(e => e.id !== eventId);
+    setMachines(prev => prev.map(m => m.id === machineId ? { ...m, scheduled_events: nextEvents } : m));
+    await supabase.from('machines').update({ scheduled_events: nextEvents }).eq('id', machineId);
   };
 
   return (
@@ -237,6 +259,13 @@ export function FabMachinery() {
 
       {/* List */}
       <div className="space-y-3">
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
+            <div className="w-5 h-5 border-2 border-border border-t-blue-500 rounded-full animate-spin" />
+            {t('app.loading')}
+          </div>
+        ) : (
+        <>
         {filtered.length === 0 && (
           <div className="text-center py-16 text-muted-foreground">
             <Settings size={36} className="mx-auto mb-3 opacity-20" />
@@ -431,6 +460,8 @@ export function FabMachinery() {
             </div>
           );
         })}
+        </>
+        )}
       </div>
 
       {/* ══ Add/Edit Dialog ══ */}

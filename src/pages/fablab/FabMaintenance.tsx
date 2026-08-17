@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/stores/authStore';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import { PageTransition } from '@/components/layout/PageTransition';
+import { supabase } from '@/lib/supabase';
 
 // ── Types ─────────────────────────────────────────────────────────
 type TicketStatus = 'aberto' | 'em_andamento' | 'aguardando_peca' | 'resolvido';
@@ -55,13 +56,8 @@ const EMPTY_FORM = {
   priority: 'media' as TicketPriority, assigned_to: '', inventory_item_id: '',
 };
 
-// ── Local storage fallback (substitua por Supabase quando tiver a tabela) ──
+// ── Chave legada do localStorage (usada só para migrar dados antigos, se existirem) ──
 const STORAGE_KEY = 'fablab_maintenance_tickets';
-const loadTickets = (): MaintenanceTicket[] => {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
-};
-const saveTickets = (t: MaintenanceTicket[]) =>
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(t));
 
 // ── Component ─────────────────────────────────────────────────────
 const LOCALE_MAP: Record<string, string> = { pt: 'pt-BR', en: 'en-US', es: 'es-ES', fr: 'fr-FR' };
@@ -85,7 +81,8 @@ export function FabMaintenance() {
   const { items } = useInventoryStore();
   const isAdmin = user?.role === 'admin' || user?.role === 'professor';
 
-  const [tickets, setTickets] = useState<MaintenanceTicket[]>(loadTickets);
+  const [tickets, setTickets] = useState<MaintenanceTicket[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<TicketStatus | 'all'>('all');
   const [addOpen, setAddOpen] = useState(false);
@@ -94,8 +91,28 @@ export function FabMaintenance() {
   const [logNote, setLogNote] = useState('');
   const [form, setForm] = useState(EMPTY_FORM);
 
-  // Persist
-  useEffect(() => { saveTickets(tickets); }, [tickets]);
+  useEffect(() => { fetchTickets(); }, []);
+
+  const fetchTickets = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('maintenance_tickets').select('*').order('opened_at', { ascending: false });
+    if (!error && data) {
+      setTickets(data as MaintenanceTicket[]);
+    } else {
+      // Migração única: dados antigos que só existiam no localStorage deste navegador
+      const legacy: MaintenanceTicket[] = (() => {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+      })();
+      if (legacy.length > 0) {
+        const { data: migrated } = await supabase.from('maintenance_tickets').insert(legacy.map(({ id, ...tk }) => tk)).select();
+        if (migrated) {
+          setTickets(migrated as MaintenanceTicket[]);
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      }
+    }
+    setLoading(false);
+  };
 
   const machines = [
     ...new Set([
@@ -120,54 +137,55 @@ export function FabMaintenance() {
   };
 
   // ── CRUD ──
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.machine_name.trim() || !form.problem.trim()) return;
-    const now = new Date().toISOString();
     if (editId) {
-      setTickets(prev => prev.map(t => t.id === editId
-        ? { ...t, ...form } : t));
+      const { data } = await supabase.from('maintenance_tickets').update(form).eq('id', editId).select().single();
+      if (data) setTickets(prev => prev.map(tk => tk.id === editId ? (data as MaintenanceTicket) : tk));
       setEditId(null);
     } else {
-      const ticket: MaintenanceTicket = {
-        id: crypto.randomUUID(),
+      const now = new Date().toISOString();
+      const payload = {
         ...form,
-        status: 'aberto',
+        status: 'aberto' as TicketStatus,
         reported_by: user?.name || t('fabMaintenance.anonymous'),
         opened_at: now,
         logs: [{ id: crypto.randomUUID(), date: now, author: user?.name || '', note: t('fabMaintenance.ticketOpened') }],
       };
-      setTickets(prev => [ticket, ...prev]);
+      const { data } = await supabase.from('maintenance_tickets').insert(payload).select().single();
+      if (data) setTickets(prev => [data as MaintenanceTicket, ...prev]);
     }
     setAddOpen(false);
     setForm(EMPTY_FORM);
   };
 
-  const handleStatusChange = (id: string, status: TicketStatus) => {
+  const handleStatusChange = async (id: string, status: TicketStatus) => {
     const now = new Date().toISOString();
-    setTickets(prev => prev.map(tk => tk.id === id ? {
-      ...tk,
-      status,
-      resolved_at: status === 'resolvido' ? now : tk.resolved_at,
-      logs: [...tk.logs, {
-        id: crypto.randomUUID(), date: now,
-        author: user?.name || '',
-        note: `${t('fabMaintenance.statusChangedTo')}: ${STATUS_CONFIG[status].label}`,
-      }],
-    } : tk));
+    const target = tickets.find(tk => tk.id === id);
+    if (!target) return;
+    const nextLogs = [...target.logs, {
+      id: crypto.randomUUID(), date: now, author: user?.name || '',
+      note: `${t('fabMaintenance.statusChangedTo')}: ${STATUS_CONFIG[status].label}`,
+    }];
+    const resolved_at = status === 'resolvido' ? now : target.resolved_at;
+    setTickets(prev => prev.map(tk => tk.id === id ? { ...tk, status, resolved_at, logs: nextLogs } : tk));
+    await supabase.from('maintenance_tickets').update({ status, resolved_at, logs: nextLogs }).eq('id', id);
   };
 
-  const handleAddLog = (id: string) => {
+  const handleAddLog = async (id: string) => {
     if (!logNote.trim()) return;
     const now = new Date().toISOString();
-    setTickets(prev => prev.map(t => t.id === id ? {
-      ...t,
-      logs: [...t.logs, { id: crypto.randomUUID(), date: now, author: user?.name || '', note: logNote.trim() }],
-    } : t));
+    const target = tickets.find(tk => tk.id === id);
+    if (!target) return;
+    const nextLogs = [...target.logs, { id: crypto.randomUUID(), date: now, author: user?.name || '', note: logNote.trim() }];
+    setTickets(prev => prev.map(tk => tk.id === id ? { ...tk, logs: nextLogs } : tk));
     setLogNote('');
+    await supabase.from('maintenance_tickets').update({ logs: nextLogs }).eq('id', id);
   };
 
-  const handleDelete = (id: string) => {
-    setTickets(prev => prev.filter(t => t.id !== id));
+  const handleDelete = async (id: string) => {
+    await supabase.from('maintenance_tickets').delete().eq('id', id);
+    setTickets(prev => prev.filter(tk => tk.id !== id));
     if (detailId === id) setDetailId(null);
   };
 
@@ -218,6 +236,13 @@ export function FabMaintenance() {
 
       {/* Tickets list */}
       <div className="space-y-3">
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
+            <div className="w-5 h-5 border-2 border-border border-t-blue-500 rounded-full animate-spin" />
+            {t('app.loading')}
+          </div>
+        ) : (
+        <>
         {filtered.length === 0 && (
           <div className="text-center py-16 text-muted-foreground">
             <Wrench size={36} className="mx-auto mb-3 opacity-20" />
@@ -339,6 +364,8 @@ export function FabMaintenance() {
             </div>
           );
         })}
+        </>
+        )}
       </div>
 
       {/* ══ Add/Edit Modal ══ */}
