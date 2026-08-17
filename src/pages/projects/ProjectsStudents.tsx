@@ -1,26 +1,41 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Edit2, Trash2, MoreVertical } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Plus, Search, Edit2, Trash2, MoreVertical, ArrowLeft, FolderKanban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useStudentStore } from '@/stores/studentStore';
 import { useAuthStore } from '@/stores/authStore';
 import { SKILL_AREAS } from '@/lib/constants';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
+
+interface ProjectOption { id: string; title: string; }
 
 export function ProjectsStudents() {
   const { t } = useTranslation();
   const { students, addStudent, deleteStudent, fetchStudents } = useStudentStore();
   const [deleteStudentId, setDeleteStudentId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [searchParams] = useSearchParams();
+  const projectId = searchParams.get('project') || '';
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
 
   useEffect(() => { fetchStudents(); }, []);
+  useEffect(() => {
+    supabase.from('projects').select('id, title').order('title').then(({ data }) => {
+      if (data) setProjects(data as ProjectOption[]);
+    });
+  }, []);
+
+  const currentProject = projects.find(p => p.id === projectId);
+
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
@@ -28,13 +43,17 @@ export function ProjectsStudents() {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({
     name: '', birth: '', grade: '', school: '', resp: '', respContact: '',
-    areas: [] as string[], notes: '', identifiedBy: user?.name || '',
+    areas: [] as string[], notes: '', identifiedBy: user?.name || '', project_id: projectId,
   });
+
+  // Mantém o projeto pré-selecionado no formulário sincronizado com a URL
+  useEffect(() => { setForm(p => ({ ...p, project_id: projectId })); }, [projectId]);
 
   const filtered = students.filter((s) => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || s.status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchProject = !projectId || s.project_id === projectId;
+    return matchSearch && matchStatus && matchProject;
   });
 
   const avgGrade = (s: typeof students[0]) => {
@@ -60,9 +79,10 @@ export function ProjectsStudents() {
       name: form.name, birth_date: form.birth, grade: form.grade, school: form.school,
       status: 'identificado', responsible_name: form.resp, responsible_contact: form.respContact,
       primary_areas: form.areas, notes: form.notes, identified_at: new Date().toISOString().split('T')[0], identified_by: form.identifiedBy,
+      project_id: form.project_id || undefined,
     });
     setModal(false);
-    setForm({ name: '', birth: '', grade: '', school: '', resp: '', respContact: '', areas: [], notes: '', identifiedBy: user?.name || '' });
+    setForm({ name: '', birth: '', grade: '', school: '', resp: '', respContact: '', areas: [], notes: '', identifiedBy: user?.name || '', project_id: projectId });
   };
 
   const statusBadge = (status: string) => {
@@ -77,10 +97,22 @@ export function ProjectsStudents() {
     <PageTransition>
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
+          {currentProject && (
+            <button onClick={() => navigate('/projects/manage')} className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground mb-1.5">
+              <ArrowLeft size={12} /> <FolderKanban size={12} /> {currentProject.title}
+            </button>
+          )}
           <h1 className="text-xl font-extrabold">{t('gifted.studentsTitle')}</h1>
-          <p className="text-sm text-muted-foreground">{students.length} alunos no programa</p>
+          <p className="text-sm text-muted-foreground">
+            {filtered.length} {currentProject ? `alunos em "${currentProject.title}"` : 'alunos no programa'}
+          </p>
         </div>
-        <Button size="sm" onClick={() => setModal(true)}><Plus size={14} className="mr-1" />{t('gifted.newStudent')}</Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => navigate(`/projects/attendance${projectId ? `?project=${projectId}` : ''}`)}>
+            {t('attendance.title')}
+          </Button>
+          <Button size="sm" onClick={() => setModal(true)}><Plus size={14} className="mr-1" />{t('gifted.newStudent')}</Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-5">
@@ -88,6 +120,20 @@ export function ProjectsStudents() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Buscar aluno..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-9 w-64 text-sm" />
         </div>
+        {!projectId && projects.length > 0 && (
+          <Select value="all" onValueChange={(v) => navigate(v === 'all' ? '/projects/students' : `/projects/students?project=${v}`)}>
+            <SelectTrigger className="h-9 w-52 text-sm"><SelectValue placeholder={t('gifted.project')} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('gifted.allProjects')}</SelectItem>
+              {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+        {projectId && (
+          <Button size="sm" variant="ghost" onClick={() => navigate('/projects/students')} className="h-9 text-xs">
+            {t('gifted.viewAllStudents')}
+          </Button>
+        )}
         <div className="flex gap-1.5 flex-wrap">
           {(['all', 'identificado', 'em_avaliacao', 'monitoramento', 'concluido'] as const).map((f) => (
             <button key={f} onClick={() => setStatusFilter(f)}
@@ -152,6 +198,18 @@ export function ProjectsStudents() {
           <DialogHeader><DialogTitle>{t('gifted.registerStudent')}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-2"><Label>{t('gifted.studentNameRequired')}</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+            {projects.length > 0 && (
+              <div className="space-y-2">
+                <Label>{t('gifted.project')}</Label>
+                <Select value={form.project_id || 'none'} onValueChange={(v) => setForm({ ...form, project_id: v === 'none' ? '' : v })}>
+                  <SelectTrigger><SelectValue placeholder={t('gifted.noProject')} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t('gifted.noProject')}</SelectItem>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2"><Label>Data de nascimento</Label><Input type="date" value={form.birth} onChange={(e) => setForm({ ...form, birth: e.target.value })} /></div>
               <div className="space-y-2"><Label>{t('gifted.gradeRequired')}</Label><Input value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })} placeholder="Ex: 8º Ano A" /></div>

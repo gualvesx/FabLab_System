@@ -40,6 +40,7 @@ const FabBlog        = lazy(() => import('@/pages/fablab/FabBlog').then(m => ({ 
 const ProjectsHome     = lazy(() => import('@/pages/projects/ProjectsHome').then(m => ({ default: m.ProjectsHome })));
 const ProjectsDashboard= lazy(() => import('@/pages/projects/ProjectsDashboard').then(m => ({ default: m.ProjectsDashboard })));
 const ProjectsStudents = lazy(() => import('@/pages/projects/ProjectsStudents').then(m => ({ default: m.ProjectsStudents })));
+const ProjectsAttendance = lazy(() => import('@/pages/projects/ProjectsAttendance').then(m => ({ default: m.ProjectsAttendance })));
 const ProjectsManage   = lazy(() => import('@/pages/projects/ProjectsManage').then(m => ({ default: m.ProjectsManage })));
 const StudentProfile   = lazy(() => import('@/pages/projects/StudentProfile').then(m => ({ default: m.StudentProfile })));
 const QuizCreator      = lazy(() => import('@/pages/projects/QuizCreator').then(m => ({ default: m.QuizCreator })));
@@ -91,6 +92,7 @@ export default function App() {
         <Route path="projects/home"         element={<Suspense fallback={<PageLoader />}><ProjectsHome /></Suspense>} />
         <Route path="projects/dashboard"    element={<Suspense fallback={<PageLoader />}><ProjectsDashboard /></Suspense>} />
         <Route path="projects/students"     element={<Suspense fallback={<PageLoader />}><ProjectsStudents /></Suspense>} />
+        <Route path="projects/attendance"   element={<Suspense fallback={<PageLoader />}><ProjectsAttendance /></Suspense>} />
         <Route path="projects/manage"       element={<Suspense fallback={<PageLoader />}><ProjectsManage /></Suspense>} />
         <Route path="projects/student/:id"  element={<Suspense fallback={<PageLoader />}><StudentProfile /></Suspense>} />
         <Route path="projects/quiz-creator" element={<Suspense fallback={<PageLoader />}><QuizCreator /></Suspense>} />

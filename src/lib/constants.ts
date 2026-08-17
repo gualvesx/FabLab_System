@@ -45,6 +45,7 @@ export const ALL_ROUTES = [
   { route: '/projects/home',        label: 'Projetos · Início',       module: 'projects' },
   { route: '/projects/dashboard',   label: 'Projetos · Dashboard',    module: 'projects' },
   { route: '/projects/students',    label: 'Projetos · Alunos',       module: 'projects' },
+  { route: '/projects/attendance',  label: 'Projetos · Presença',     module: 'projects' },
   { route: '/projects/quiz-creator',label: 'Projetos · Quiz',         module: 'projects' },
   { route: '/projects/manage',      label: 'Projetos · Gerenciar',    module: 'projects' },
   // Student

@@ -18,7 +18,7 @@ import type { UserRole } from '@/types';
 import {
   Home, LayoutDashboard, Package, Calendar, Lightbulb,
   BarChart3, Users, GraduationCap, FileText, HelpCircle,
-  BookOpen, FolderKanban, FolderOpen, Cpu,
+  BookOpen, FolderKanban, FolderOpen, Cpu, ClipboardCheck,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -54,7 +54,7 @@ export function Sidebar({ module, role, collapsed }: SidebarProps) {
     if (role === 'admin') return new Set(['*']);
     if (!user?.class_id) {
       const defaults: Record<string, string[]> = {
-        professor:   ['/fablab/home','/fablab/inventory','/fablab/machinery','/fablab/maintenance','/fablab/files','/fablab/schedule','/fablab/suggestions','/fablab/projects','/fablab/blog','/fablab/reports','/projects/home','/projects/dashboard','/projects/students','/projects/quiz-creator','/projects/manage'],
+        professor:   ['/fablab/home','/fablab/inventory','/fablab/machinery','/fablab/maintenance','/fablab/files','/fablab/schedule','/fablab/suggestions','/fablab/projects','/fablab/blog','/fablab/reports','/projects/home','/projects/dashboard','/projects/students','/projects/attendance','/projects/quiz-creator','/projects/manage'],
         funcionario: ['/fablab/home','/fablab/inventory','/fablab/machinery','/fablab/maintenance','/fablab/files','/fablab/schedule','/fablab/blog'],
         student:     ['/student/quiz','/student/grades','/student/proposal','/fablab/files','/fablab/blog'],
       };
@@ -91,6 +91,7 @@ export function Sidebar({ module, role, collapsed }: SidebarProps) {
     { divider: true, label: '', path: '', icon: null },
     { label: t('sidebar.projects'),      path: '/projects/manage',       icon: <FolderKanban size={18} /> },
     { label: t('sidebar.students'),        path: '/projects/students',     icon: <Users size={18} /> },
+    { label: t('sidebar.attendance'),      path: '/projects/attendance',   icon: <ClipboardCheck size={18} /> },
     { label: t('sidebar.quiz'),          path: '/projects/quiz-creator', icon: <HelpCircle size={18} /> },
   ];
 

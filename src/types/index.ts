@@ -70,6 +70,18 @@ export interface Achievement {
   type: 'olimpiada' | 'projeto' | 'reconhecimento' | 'publicacao' | 'outro';
 }
 
+export interface Attendance {
+  id: string;
+  student_id: string;
+  project_id?: string;
+  date: string;
+  status: 'presente' | 'falta' | 'justificada';
+  notes: string;
+  registered_by: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Student {
   id: string;
   name: string;
